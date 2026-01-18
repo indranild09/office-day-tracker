@@ -3,7 +3,7 @@ import Calendar from "./Calendar";
 import { signOut } from "firebase/auth";
 import { auth, db } from "../services/firebase";
 import { doc, getDoc, collection, getDocs } from "firebase/firestore";
-import { calculateMonthlyStats } from "../utils/counterUtils";
+import { calculateCounters } from "../utils/counterUtils";
 import { calculateQuarterStats } from "../utils/quarterUtils";
 
 export default function Dashboard({ user }) {
@@ -59,7 +59,13 @@ export default function Dashboard({ user }) {
       }
     });
 
-    const monthly = calculateMonthlyStats(map, policy, year, month);
+    const stats = calculateCounters({
+  year,
+  month,
+  entries: calendarEntries,
+  policy,
+  today: new Date(),
+});
     setStats(monthly);
 
     if (policy.scenarioType === "FIXED_WFO") {
