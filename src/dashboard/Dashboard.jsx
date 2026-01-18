@@ -12,6 +12,7 @@ export default function Dashboard({ user }) {
   const [stats, setStats] = useState(null);
   const [quarterStats, setQuarterStats] = useState(null);
   const [firstName, setFirstName] = useState("");
+  const [loading, setLoading] = useState(true);
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
@@ -29,79 +30,92 @@ export default function Dashboard({ user }) {
   }, [currentDate, policy]);
 
   async function loadUserProfile() {
-    const ref = doc(db, "users", user.uid);
-    const snap = await getDoc(ref);
+    try {
+      const ref = doc(db, "users", user.uid);
+      const snap = await getDoc(ref);
 
-    if (!snap.exists()) return;
+      if (!snap.exists()) return;
 
-    const data = snap.data();
+      const data = snap.data();
+      setPolicy(data.policy || null);
 
-    setPolicy(data.policy || null);
-
-    // ✅ Robust name fetch
-    if (data.firstName && data.firstName.trim() !== "") {
-      setFirstName(data.firstName.trim());
-    } else {
-      setFirstName(""); // fallback handled in greeting
+      if (data.firstName && data.firstName.trim()) {
+        setFirstName(data.firstName.trim());
+      } else {
+        setFirstName("");
+      }
+    } catch (err) {
+      console.error("Profile load failed:", err);
     }
   }
 
-
   async function loadMonthData() {
-    const snap = await getDocs(
-      collection(db, "users", user.uid, "calendar")
-    );
+    try {
+      setLoading(true);
 
-    const map = {};
-    snap.forEach((d) => {
-      if (d.data().month === monthKey) {
-        map[d.id] = d.data();
+      const snap = await getDocs(
+        collection(db, "users", user.uid, "calendar")
+      );
+
+      const entriesMap = {};
+      snap.forEach((d) => {
+        if (d.data().month === monthKey) {
+          entriesMap[d.id] = d.data();
+        }
+      });
+
+      // ✅ FIXED: correct variable names
+      const monthlyStats = calculateCounters({
+        year,
+        month,
+        entries: entriesMap,
+        policy,
+        today: new Date(),
+      });
+
+      setStats(monthlyStats);
+
+      if (policy?.scenarioType === "FIXED_WFO") {
+        const q = getQuarter(month);
+        const qStats = calculateQuarterStats(
+          entriesMap,
+          policy,
+          year,
+          q
+        );
+        setQuarterStats(qStats);
+      } else {
+        setQuarterStats(null);
       }
-    });
-
-    const stats = calculateCounters({
-  year,
-  month,
-  entries: calendarEntries,
-  policy,
-  today: new Date(),
-});
-    setStats(monthly);
-
-    if (policy.scenarioType === "FIXED_WFO") {
-      const q = getQuarter(month);
-      const qStats = calculateQuarterStats(map, policy, year, q);
-      setQuarterStats(qStats);
-    } else {
-      setQuarterStats(null);
+    } catch (err) {
+      console.error("Month data load failed:", err);
+    } finally {
+      setLoading(false);
     }
   }
 
   const getGreeting = () => {
     if (!firstName) return "Hey";
 
-    if (firstName === "Pallavi") {
-      return `Hey Sexy ${firstName}`;
-    }
-
-    if (firstName === "Pallu") {
-      return `Hey ${firstName} Darling`;
-    }
+    if (firstName === "Pallavi") return `Hey Sexy ${firstName}`;
+    if (firstName === "Pallu") return `Hey ${firstName} Darling`;
 
     return `Hey ${firstName}`;
   };
 
-
   const prevMonth = () =>
     setCurrentDate(new Date(year, month - 1, 1));
+
   const nextMonth = () =>
     setCurrentDate(new Date(year, month + 1, 1));
 
-  if (!policy || !stats) return null;
+  // ✅ No more blank screen
+  if (loading) return <div style={{ padding: 40 }}>Loading…</div>;
+  if (!policy || !stats) return <div style={{ padding: 40 }}>No data</div>;
 
   return (
     <div className="dashboard">
-      {/* HEADER + SALUTATION (FIXED) */}
+      {/* HEADER */}
       <header className="dash-header">
         <div className="header-left">
           <h2 className="month-title">
@@ -122,7 +136,6 @@ export default function Dashboard({ user }) {
         </div>
       </header>
 
-
       {/* CALENDAR */}
       <Calendar
         currentDate={currentDate}
@@ -130,7 +143,7 @@ export default function Dashboard({ user }) {
       />
 
       {/* MONTHLY SUMMARY */}
-      <h3 style={{ marginBottom: "12px", opacity: 0.9 }}>
+      <h3 style={{ marginBottom: 12, opacity: 0.9 }}>
         Monthly Summary
       </h3>
 
@@ -152,25 +165,24 @@ export default function Dashboard({ user }) {
 
           {stats.compensationWfo > 0 && (
             <span
-              title={`+${stats.compensationWfo} due to holidays/leaves`}
+              title={`+${stats.compensationWfo} due to holidays`}
               style={{
-                marginLeft: "8px",
-                fontSize: "12px",
+                marginLeft: 8,
+                fontSize: 12,
                 opacity: 0.8,
-                cursor: "help"
+                cursor: "help",
               }}
             >
               (+{stats.compensationWfo})
             </span>
           )}
         </div>
-
       </div>
 
       {/* QUARTERLY SUMMARY */}
       {policy.scenarioType === "FIXED_WFO" && quarterStats && (
         <>
-          <h3 style={{ marginBottom: "12px", opacity: 0.9 }}>
+          <h3 style={{ marginBottom: 12, opacity: 0.9 }}>
             Quarterly Summary
           </h3>
 
