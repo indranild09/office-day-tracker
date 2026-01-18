@@ -1,4 +1,7 @@
 export function calculateMonthlyStats(entries, policy, year, month) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
   let wfo = 0;
   let wfh = 0;
   let leave = 0;
@@ -11,7 +14,9 @@ export function calculateMonthlyStats(entries, policy, year, month) {
     if (e.type === "HOLIDAY") holiday++;
   });
 
-  // Total working days (Mon–Fri)
+  // -----------------------------
+  // Working days (Mon–Fri)
+  // -----------------------------
   let workingDays = 0;
   const daysInMonth = new Date(year, month + 1, 0).getDate();
 
@@ -22,17 +27,62 @@ export function calculateMonthlyStats(entries, policy, year, month) {
 
   workingDays -= holiday;
 
-  // ✅ Monthly WFO required
-  let monthlyWfoRequired = workingDays - leave;
-
+  // -----------------------------
+  // Scenario 1: Monthly WFH
+  // -----------------------------
   if (policy.scenarioType === "MONTHLY_WFH") {
-    monthlyWfoRequired -= policy.wfhLimit;
+    const monthlyWfoRequired =
+      workingDays - policy.wfhLimit - leave;
+
+    return {
+      workingDays,
+      wfo,
+      wfh,
+      leave,
+      holiday,
+      wfhRemaining: Math.max(policy.wfhLimit - wfh, 0),
+      monthlyWfoRemaining: Math.max(
+        monthlyWfoRequired - wfo,
+        0
+      )
+    };
   }
 
-  const monthlyWfoRemaining = Math.max(
-    monthlyWfoRequired - wfo,
-    0
+  // -----------------------------
+  // Scenario 2: FIXED WFO (🔥 KEY FIX)
+  // -----------------------------
+  const fixedDays = policy.fixedWfoDays.map((d) =>
+    d.toUpperCase()
   );
+
+  let futureFixedWfo = 0;
+  let futureHolidayComp = 0;
+
+  for (let d = 1; d <= daysInMonth; d++) {
+    const date = new Date(year, month, d);
+    date.setHours(0, 0, 0, 0);
+
+    const day = date.getDay();
+    if (day === 0 || day === 6) continue;
+
+    if (date < today) continue; // ✅ ONLY FUTURE DAYS
+
+    const dayName = date
+      .toLocaleDateString("en-US", { weekday: "short" })
+      .toUpperCase();
+
+    if (!fixedDays.includes(dayName)) continue;
+
+    futureFixedWfo++;
+
+    const key = date.toISOString().slice(0, 10);
+    if (entries[key]?.type === "HOLIDAY") {
+      futureHolidayComp++;
+    }
+  }
+
+  const monthlyWfoRemaining =
+    futureFixedWfo + futureHolidayComp;
 
   return {
     workingDays,
@@ -40,10 +90,7 @@ export function calculateMonthlyStats(entries, policy, year, month) {
     wfh,
     leave,
     holiday,
-    wfhRemaining:
-      policy.scenarioType === "MONTHLY_WFH"
-        ? Math.max(policy.wfhLimit - wfh, 0)
-        : null,
+    wfhRemaining: null,
     monthlyWfoRemaining
   };
 }
