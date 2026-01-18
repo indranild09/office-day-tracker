@@ -49,48 +49,55 @@ export function calculateMonthlyStats(entries, policy, year, month) {
   }
 
   // -----------------------------
-  // Scenario 2: FIXED WFO (🔥 KEY FIX)
-  // -----------------------------
-  const fixedDays = policy.fixedWfoDays.map((d) =>
-    d.toUpperCase()
-  );
+// Scenario 2: FIXED WFO (FINAL FIX)
+// -----------------------------
+const fixedDays = policy.fixedWfoDays.map(d => d.toUpperCase());
 
-  let futureFixedWfo = 0;
-  let futureHolidayComp = 0;
+let requiredFutureWfo = 0;
+let completedFutureWfo = 0;
+let holidayCompensation = 0;
 
-  for (let d = 1; d <= daysInMonth; d++) {
-    const date = new Date(year, month, d);
-    date.setHours(0, 0, 0, 0);
+for (let d = 1; d <= daysInMonth; d++) {
+  const date = new Date(year, month, d);
+  date.setHours(0, 0, 0, 0);
 
-    const day = date.getDay();
-    if (day === 0 || day === 6) continue;
+  if (date < today) continue;
 
-    if (date < today) continue; // ✅ ONLY FUTURE DAYS
+  const day = date.getDay();
+  if (day === 0 || day === 6) continue;
 
-    const dayName = date
-      .toLocaleDateString("en-US", { weekday: "short" })
-      .toUpperCase();
+  const dayName = date
+    .toLocaleDateString("en-US", { weekday: "short" })
+    .toUpperCase();
 
-    if (!fixedDays.includes(dayName)) continue;
+  if (!fixedDays.includes(dayName)) continue;
 
-    futureFixedWfo++;
+  requiredFutureWfo++;
 
-    const key = date.toISOString().slice(0, 10);
-    if (entries[key]?.type === "HOLIDAY") {
-      futureHolidayComp++;
-    }
+  const key = date.toISOString().slice(0, 10);
+  const entry = entries[key];
+
+  if (entry?.type === "WFO") {
+    completedFutureWfo++;
   }
 
-  const monthlyWfoRemaining =
-    futureFixedWfo + futureHolidayComp;
+  if (entry?.type === "HOLIDAY") {
+    holidayCompensation++;
+  }
+}
 
-  return {
-    workingDays,
-    wfo,
-    wfh,
-    leave,
-    holiday,
-    wfhRemaining: null,
-    monthlyWfoRemaining
-  };
+const monthlyWfoRemaining = Math.max(
+  requiredFutureWfo - completedFutureWfo + holidayCompensation,
+  0
+);
+
+return {
+  workingDays,
+  wfo,
+  wfh,
+  leave,
+  holiday,
+  wfhRemaining: null,
+  monthlyWfoRemaining
+};
 }
