@@ -1,26 +1,15 @@
-// counterUtils.js
-
-// -----------------------------
-// Helpers
-// -----------------------------
-function isWeekend(date) {
+// -------------------- helpers --------------------
+const isWeekend = (date) => {
   const d = date.getDay();
   return d === 0 || d === 6;
-}
+};
 
-function getDayName(date) {
-  return date
-    .toLocaleDateString("en-US", { weekday: "short" })
-    .toUpperCase();
-}
+const dayName = (date) =>
+  date.toLocaleDateString("en-US", { weekday: "short" }).toUpperCase();
 
-function dateKey(date) {
-  return date.toISOString().slice(0, 10);
-}
+const dateKey = (date) => date.toISOString().slice(0, 10);
 
-// -----------------------------
-// MAIN COUNTER
-// -----------------------------
+// -------------------- main --------------------
 export function calculateCounters({
   year,
   month,
@@ -38,17 +27,12 @@ export function calculateCounters({
   let leave = 0;
   let holiday = 0;
 
-  // -----------------------------
-  // BASIC COUNTS (FULL MONTH)
-  // -----------------------------
+  // --------- COMMON COUNTING (past + future) ---------
   for (let d = 1; d <= daysInMonth; d++) {
     const date = new Date(year, month, d);
-    date.setHours(0, 0, 0, 0);
-
     if (isWeekend(date)) continue;
 
-    const key = dateKey(date);
-    const entry = entries[key];
+    const entry = entries[dateKey(date)];
 
     if (entry?.type === "HOLIDAY") {
       holiday++;
@@ -62,12 +46,11 @@ export function calculateCounters({
     if (entry?.type === "LEAVE") leave++;
   }
 
-  // =====================================================
-  // SCENARIO 1: MONTHLY WFH LIMIT
-  // =====================================================
-  if (policy.scenarioType === "MONTHLY_WFH") {
-    const allowedWfh = policy.wfhLimit || 0;
-    const wfhRemaining = Math.max(allowedWfh - wfh, 0);
+  // ==================================================
+  // 🟦 SCENARIO 1 — MONTHLY WFO TARGET
+  // ==================================================
+  if (policy.scenarioType === "MONTHLY_WFO") {
+    const target = policy.monthlyWfoTarget || 0;
 
     return {
       workingDays,
@@ -75,78 +58,50 @@ export function calculateCounters({
       wfh,
       leave,
       holiday,
-      wfhRemaining,
-      monthlyWfoRemaining: null,
+      monthlyWfoRemaining: Math.max(target - wfo, 0),
       compensationWfo: 0,
     };
   }
 
-  // =====================================================
-  // SCENARIO 2: FIXED WFO DAYS (CORRECT LOGIC)
-  // =====================================================
-  if (policy.scenarioType === "FIXED_WFO") {
-    const fixedDays = policy.fixedWfoDays.map(d => d.toUpperCase());
+  // ==================================================
+  // 🟩 SCENARIO 2 — FIXED WFO DAYS
+  // ==================================================
+  const fixedDays = (policy.fixedWfoDays || []).map((d) =>
+    d.toUpperCase()
+  );
 
-    let pendingNormalWfo = 0;
-    let compensationWfo = 0;
+  let futureRequiredWfo = 0;
+  let compensationWfo = 0;
 
-    for (let d = 1; d <= daysInMonth; d++) {
-      const date = new Date(year, month, d);
-      date.setHours(0, 0, 0, 0);
+  for (let d = 1; d <= daysInMonth; d++) {
+    const date = new Date(year, month, d);
+    date.setHours(0, 0, 0, 0);
 
-      // Only future dates
-      if (date < today) continue;
-      if (isWeekend(date)) continue;
+    if (date < today) continue;
+    if (isWeekend(date)) continue;
+    if (!fixedDays.includes(dayName(date))) continue;
 
-      const dayName = getDayName(date);
-      if (!fixedDays.includes(dayName)) continue;
+    const entry = entries[dateKey(date)];
 
-      const key = dateKey(date);
-      const entry = entries[key];
-
-      if (!entry) {
-        // Fixed WFO day not yet marked
-        pendingNormalWfo++;
-        continue;
-      }
-
-      if (entry.type === "WFO") {
-        // Already completed
-        continue;
-      }
-
-      if (entry.type === "HOLIDAY" || entry.type === "LEAVE") {
-        // Fixed WFO lost → needs compensation
-        compensationWfo++;
-      }
+    if (!entry) {
+      // future fixed day not yet marked
+      futureRequiredWfo++;
+    } else if (
+      entry.type === "HOLIDAY" ||
+      entry.type === "LEAVE"
+    ) {
+      // compensation needed
+      compensationWfo++;
     }
-
-    const monthlyWfoRemaining =
-      pendingNormalWfo + compensationWfo;
-
-    return {
-      workingDays,
-      wfo,
-      wfh,
-      leave,
-      holiday,
-      wfhRemaining: null,
-      monthlyWfoRemaining,
-      compensationWfo, // 👈 for tooltip “+X due to holidays”
-    };
   }
 
-  // -----------------------------
-  // Fallback
-  // -----------------------------
   return {
     workingDays,
     wfo,
     wfh,
     leave,
     holiday,
-    wfhRemaining: null,
-    monthlyWfoRemaining: null,
-    compensationWfo: 0,
+    monthlyWfoRemaining: futureRequiredWfo + compensationWfo,
+    compensationWfo,
   };
 }
