@@ -38,37 +38,40 @@ export default function Dashboard({ user }) {
   }
 
   async function loadMonthData() {
-    const snap = await getDocs(
-      collection(db, "users", user.uid, "calendar")
-    );
+  const snap = await getDocs(
+    collection(db, "users", user.uid, "calendar")
+  );
 
-    const calendarEntries = {};
-    snap.forEach((d) => {
-      if (d.data().month === monthKey) {
-        calendarEntries[d.id] = d.data();
-      }
-    });
+  const entries = {};
 
-    // ✅ FIXED: calendarEntries now defined
-    const monthlyStats = calculateCounters({
-      year,
-      month,
-      entries: calendarEntries,
-      policy,
-      today: new Date(),
-    });
+  snap.forEach((docSnap) => {
+    const data = docSnap.data();
 
-    setStats(monthlyStats);
-
-    if (policy.scenarioType === "FIXED_WFO") {
-      const q = getQuarter(month);
-      setQuarterStats(
-        calculateQuarterStats(calendarEntries, policy, year, q)
-      );
-    } else {
-      setQuarterStats(null);
+    if (data.month === monthKey && data.date) {
+      // ✅ THIS is the key fix
+      entries[data.date] = data;
     }
+  });
+
+  const monthlyStats = calculateCounters({
+    year,
+    month,
+    entries,
+    policy,
+    today: new Date(),
+  });
+
+  setStats(monthlyStats);
+
+  if (policy.scenarioType === "FIXED_WFO") {
+    const q = Math.ceil((month + 1) / 3);
+    setQuarterStats(
+      calculateQuarterStats(entries, policy, year, q)
+    );
+  } else {
+    setQuarterStats(null);
   }
+}
 
   const getGreeting = () => {
     if (!firstName) return "Hey";
