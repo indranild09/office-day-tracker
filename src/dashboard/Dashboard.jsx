@@ -103,7 +103,7 @@ export default function Dashboard({ user }) {
     </h2>
 
     <p className="greeting-text">
-      {getGreeting()}, manage your in-office and remote day
+      {getGreeting()}, manage your in-office and remote days.
     </p>
   </div>
 
