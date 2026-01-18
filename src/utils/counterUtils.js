@@ -1,98 +1,94 @@
-export function calculateCounters({
-  year,
-  month,              // 0-based
-  entries = {},        // { "YYYY-MM-DD": { type: "WFO" | "WFH" | "LEAVE" | "HOLIDAY" } }
-  policy
-}) {
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
+// src/utils/counterUtils.js
 
-  let workingDays = 0;
+const isWeekend = (date) => {
+  const d = date.getDay();
+  return d === 0 || d === 6;
+};
+
+const getAllDatesOfMonth = (year, month) => {
+  const dates = [];
+  const lastDay = new Date(year, month + 1, 0).getDate();
+
+  for (let d = 1; d <= lastDay; d++) {
+    dates.push(new Date(year, month, d));
+  }
+  return dates;
+};
+
+export function calculateCounters({ year, month, entries, policy }) {
+  const dates = getAllDatesOfMonth(year, month);
+
+  let holiday = 0;
+  let leave = 0;
   let wfo = 0;
   let wfh = 0;
-  let leave = 0;
-  let holiday = 0;
 
-  // ---------- BASIC COUNTS ----------
-  for (let d = 1; d <= daysInMonth; d++) {
-    const date = new Date(year, month, d);
-    const day = date.getDay(); // 0 Sun, 6 Sat
-    if (day === 0 || day === 6) continue;
-
-    const key = `${year}-${String(month + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+  dates.forEach((date) => {
+    const key = date.toISOString().slice(0, 10);
     const entry = entries[key];
 
-    if (entry?.type === "HOLIDAY") {
-      holiday++;
-      continue;
-    }
+    if (!entry || isWeekend(date)) return;
 
-    workingDays++;
+    if (entry.type === "HOLIDAY") holiday++;
+    if (entry.type === "LEAVE") leave++;
+    if (entry.type === "WFO") wfo++;
+    if (entry.type === "WFH") wfh++;
+  });
 
-    if (entry?.type === "WFO") wfo++;
-    if (entry?.type === "WFH") wfh++;
-    if (entry?.type === "LEAVE") leave++;
-  }
-
-  // =====================================================
-  // 🔵 SCENARIO 1 — MONTHLY WFH
-  // =====================================================
+  // ===== SCENARIO 1 : MONTHLY_WFH =====
   if (policy.scenarioType === "MONTHLY_WFH") {
-    const effectiveWorkingDays = workingDays;
-    const totalWfoRequired =
-      Math.max(effectiveWorkingDays - policy.wfhLimit, 0);
+    const workingDays = dates.filter(
+      (d) => !isWeekend(d)
+    ).length - holiday;
+
+    const totalWfoRequired = workingDays - policy.monthlyWfhLimit;
 
     return {
-      workingDays: effectiveWorkingDays,
+      workingDays,
+      holiday,
+      leave,
       wfo,
       wfh,
-      leave,
-      holiday,
-      wfhRemaining: Math.max(policy.wfhLimit - wfh, 0),
+      wfhRemaining: Math.max(policy.monthlyWfhLimit - wfh, 0),
       monthlyWfoRemaining: Math.max(totalWfoRequired - wfo, 0),
-      compensationWfo: 0
+      compensationWfo: 0,
     };
   }
 
-  // =====================================================
-  // 🟢 SCENARIO 2 — FIXED WFO (OBLIGATION-BASED)
-  // =====================================================
-  const fixedDays = policy.fixedWfoDays.map(d => d.toLowerCase());
+  // ===== SCENARIO 2 : FIXED_WFO =====
+  const fixedDays = policy.fixedWfoDays; // e.g. ["Tue","Wed","Thu"]
 
-  let requiredWfo = 0;
+  let baseWfoObligation = 0;
   let compensationWfo = 0;
+  let workingDays = 0;
 
-  for (let d = 1; d <= daysInMonth; d++) {
-    const date = new Date(year, month, d);
-    const day = date.getDay();
-    if (day === 0 || day === 6) continue;
+  dates.forEach((date) => {
+    if (isWeekend(date)) return;
 
-    const dayName = date
-      .toLocaleDateString("en-US", { weekday: "long" })
-      .toLowerCase();
-
-    const key = `${year}-${String(month + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+    const dayName = date.toLocaleString("en-US", { weekday: "short" });
+    const key = date.toISOString().slice(0, 10);
     const entry = entries[key];
 
+    workingDays++;
+
     if (fixedDays.includes(dayName)) {
-  // Base fixed WFO obligation
-  requiredWfo++;
+      baseWfoObligation++;
 
-  // Holiday on fixed WFO day → add extra obligation
-  if (entry?.type === "HOLIDAY") {
-    compensationWfo++;
-    requiredWfo++; // 🔥 THIS LINE IS THE FIX
-  }
-}
+      if (entry?.type === "HOLIDAY") {
+        compensationWfo++;
+      }
+    }
+  });
 
-  }
+  const requiredWfo = baseWfoObligation + compensationWfo;
 
   return {
     workingDays,
+    holiday,
+    leave,
     wfo,
     wfh,
-    leave,
-    holiday,
     monthlyWfoRemaining: Math.max(requiredWfo - wfo, 0),
-    compensationWfo
+    compensationWfo,
   };
 }

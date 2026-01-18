@@ -48,38 +48,36 @@ export default function Dashboard({ user }) {
   // Load calendar entries
   // -------------------------
   async function loadMonthData() {
-    const snap = await getDocs(
-      collection(db, "users", user.uid, "calendar")
-    );
+  const snap = await getDocs(
+    collection(db, "users", user.uid, "calendar")
+  );
 
-    // ✅ IMPORTANT: date-keyed entries
-    const entries = {};
-
-    snap.forEach((docSnap) => {
-      const data = docSnap.data();
-      if (data.month === monthKey && data.date) {
-        entries[data.date] = data;
-      }
-    });
-
-    const monthlyStats = calculateCounters({
-      year,
-      month,
-      entries,
-      policy,
-    });
-
-    setStats(monthlyStats);
-
-    if (policy.scenarioType === "FIXED_WFO") {
-      const q = getQuarter(month);
-      setQuarterStats(
-        calculateQuarterStats(entries, policy, year, q)
-      );
-    } else {
-      setQuarterStats(null);
+  const calendarEntries = {};
+  snap.forEach((doc) => {
+    if (doc.data().month === monthKey) {
+      calendarEntries[doc.id] = doc.data();
     }
+  });
+
+  const monthlyStats = calculateCounters({
+    year,
+    month,
+    entries: calendarEntries,
+    policy,
+  });
+
+  setStats(monthlyStats);
+
+  if (policy.scenarioType === "FIXED_WFO") {
+    const q = Math.ceil((month + 1) / 3);
+    setQuarterStats(
+      calculateQuarterStats(calendarEntries, policy, year, q)
+    );
+  } else {
+    setQuarterStats(null);
   }
+}
+
 
   // -------------------------
   // Greeting
