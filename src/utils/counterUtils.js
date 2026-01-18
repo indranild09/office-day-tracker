@@ -41,63 +41,64 @@ export function calculateMonthlyStats(entries, policy, year, month) {
       leave,
       holiday,
       wfhRemaining: Math.max(policy.wfhLimit - wfh, 0),
-      monthlyWfoRemaining: Math.max(
-        monthlyWfoRequired - wfo,
-        0
-      )
+      monthlyWfoRemaining: Math.max(monthlyWfoRequired - wfo, 0),
     };
   }
 
   // -----------------------------
-// Scenario 2: FIXED WFO (FINAL FIX)
-// -----------------------------
-const fixedDays = policy.fixedWfoDays.map(d => d.toUpperCase());
+  // Scenario 2: FIXED WFO (CORRECT LOGIC)
+  // -----------------------------
+  const fixedDays = policy.fixedWfoDays.map(d => d.toUpperCase());
 
-let requiredFutureWfo = 0;
-let completedFutureWfo = 0;
-let holidayCompensation = 0;
+  let futureFixedWfoSlots = 0;
+  let futureHolidayOnFixedDay = 0;
+  let futureCompletedWfo = 0;
 
-for (let d = 1; d <= daysInMonth; d++) {
-  const date = new Date(year, month, d);
-  date.setHours(0, 0, 0, 0);
+  for (let d = 1; d <= daysInMonth; d++) {
+    const date = new Date(year, month, d);
+    date.setHours(0, 0, 0, 0);
 
-  if (date < today) continue;
+    if (date < today) continue;
 
-  const day = date.getDay();
-  if (day === 0 || day === 6) continue;
+    const day = date.getDay();
+    if (day === 0 || day === 6) continue;
 
-  const dayName = date
-    .toLocaleDateString("en-US", { weekday: "short" })
-    .toUpperCase();
+    const dayName = date
+      .toLocaleDateString("en-US", { weekday: "short" })
+      .toUpperCase();
 
-  if (!fixedDays.includes(dayName)) continue;
+    if (!fixedDays.includes(dayName)) continue;
 
-  requiredFutureWfo++;
+    futureFixedWfoSlots++;
 
-  const key = date.toISOString().slice(0, 10);
-  const entry = entries[key];
+    const key = date.toISOString().slice(0, 10);
+    const entry = entries[key];
 
-  if (entry?.type === "WFO") {
-    completedFutureWfo++;
+    if (entry?.type === "HOLIDAY") {
+      futureHolidayOnFixedDay++;
+    }
+
+    if (entry?.type === "WFO") {
+      futureCompletedWfo++;
+    }
   }
 
-  if (entry?.type === "HOLIDAY") {
-    holidayCompensation++;
-  }
-}
+  // Every holiday on a fixed WFO day adds ONE extra WFO later
+  const totalFutureWfoRequired =
+    futureFixedWfoSlots + futureHolidayOnFixedDay;
 
-const monthlyWfoRemaining = Math.max(
-  requiredFutureWfo - completedFutureWfo + holidayCompensation,
-  0
-);
+  const monthlyWfoRemaining = Math.max(
+    totalFutureWfoRequired - futureCompletedWfo,
+    0
+  );
 
-return {
-  workingDays,
-  wfo,
-  wfh,
-  leave,
-  holiday,
-  wfhRemaining: null,
-  monthlyWfoRemaining
-};
+  return {
+    workingDays,
+    wfo,
+    wfh,
+    leave,
+    holiday,
+    wfhRemaining: null,
+    monthlyWfoRemaining,
+  };
 }
