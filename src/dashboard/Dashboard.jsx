@@ -29,22 +29,22 @@ export default function Dashboard({ user }) {
   }, [currentDate, policy]);
 
   async function loadUserProfile() {
-  const ref = doc(db, "users", user.uid);
-  const snap = await getDoc(ref);
+    const ref = doc(db, "users", user.uid);
+    const snap = await getDoc(ref);
 
-  if (!snap.exists()) return;
+    if (!snap.exists()) return;
 
-  const data = snap.data();
+    const data = snap.data();
 
-  setPolicy(data.policy || null);
+    setPolicy(data.policy || null);
 
-  // ✅ Robust name fetch
-  if (data.firstName && data.firstName.trim() !== "") {
-    setFirstName(data.firstName.trim());
-  } else {
-    setFirstName(""); // fallback handled in greeting
+    // ✅ Robust name fetch
+    if (data.firstName && data.firstName.trim() !== "") {
+      setFirstName(data.firstName.trim());
+    } else {
+      setFirstName(""); // fallback handled in greeting
+    }
   }
-}
 
 
   async function loadMonthData() {
@@ -72,18 +72,18 @@ export default function Dashboard({ user }) {
   }
 
   const getGreeting = () => {
-  if (!firstName) return "Hey";
+    if (!firstName) return "Hey";
 
-  if (firstName === "Pallavi") {
-    return `Hey Sexy ${firstName}`;
-  }
+    if (firstName === "Pallavi") {
+      return `Hey Sexy ${firstName}`;
+    }
 
-  if (firstName === "Pallu") {
-    return `Hey ${firstName} Darling`;
-  }
+    if (firstName === "Pallu") {
+      return `Hey ${firstName} Darling`;
+    }
 
-  return `Hey ${firstName}`;
-};
+    return `Hey ${firstName}`;
+  };
 
 
   const prevMonth = () =>
@@ -97,24 +97,24 @@ export default function Dashboard({ user }) {
     <div className="dashboard">
       {/* HEADER + SALUTATION (FIXED) */}
       <header className="dash-header">
-  <div className="header-left">
-    <h2 className="month-title">
-      {currentDate.toLocaleString("default", { month: "long" })} {year}
-    </h2>
+        <div className="header-left">
+          <h2 className="month-title">
+            {currentDate.toLocaleString("default", { month: "long" })} {year}
+          </h2>
 
-    <p className="greeting-text">
-      {getGreeting()}, manage your in-office and remote days.
-    </p>
-  </div>
+          <p className="greeting-text">
+            {getGreeting()}, manage your in-office and remote days.
+          </p>
+        </div>
 
-  <div className="actions">
-    <button onClick={prevMonth}>◀</button>
-    <button onClick={nextMonth}>▶</button>
-    <button className="logout" onClick={() => signOut(auth)}>
-      Logout
-    </button>
-  </div>
-</header>
+        <div className="actions">
+          <button onClick={prevMonth}>◀</button>
+          <button onClick={nextMonth}>▶</button>
+          <button className="logout" onClick={() => signOut(auth)}>
+            Logout
+          </button>
+        </div>
+      </header>
 
 
       {/* CALENDAR */}
@@ -143,7 +143,22 @@ export default function Dashboard({ user }) {
 
         <div className="stat-card highlight">
           Monthly WFO Remaining: {stats.monthlyWfoRemaining}
+
+          {stats.compensationWfo > 0 && (
+            <span
+              title={`+${stats.compensationWfo} due to holidays/leaves`}
+              style={{
+                marginLeft: "8px",
+                fontSize: "12px",
+                opacity: 0.8,
+                cursor: "help"
+              }}
+            >
+              (+{stats.compensationWfo})
+            </span>
+          )}
         </div>
+
       </div>
 
       {/* QUARTERLY SUMMARY */}

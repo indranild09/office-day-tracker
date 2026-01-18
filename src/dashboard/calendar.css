@@ -253,3 +253,32 @@
   color: #94a3b8;
   cursor: pointer;
 }
+
+.info-icon {
+  position: relative;
+  margin-left: 6px;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.tooltip {
+  position: absolute;
+  bottom: 120%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(15, 23, 42, 0.95);
+  color: #e5e7eb;
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+  box-shadow: 0 8px 20px rgba(0,0,0,0.4);
+  z-index: 50;
+}
+
+.info-icon:hover .tooltip {
+  opacity: 1;
+}
