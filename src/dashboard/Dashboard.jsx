@@ -19,10 +19,16 @@ export default function Dashboard({ user }) {
 
   const getQuarter = (m) => Math.ceil((m + 1) / 3);
 
+  // -------------------------
+  // Load user profile
+  // -------------------------
   useEffect(() => {
     loadUserProfile();
   }, []);
 
+  // -------------------------
+  // Reload month data
+  // -------------------------
   useEffect(() => {
     if (policy) loadMonthData();
   }, [currentDate, policy]);
@@ -30,6 +36,7 @@ export default function Dashboard({ user }) {
   async function loadUserProfile() {
     const ref = doc(db, "users", user.uid);
     const snap = await getDoc(ref);
+
     if (!snap.exists()) return;
 
     const data = snap.data();
@@ -37,42 +44,46 @@ export default function Dashboard({ user }) {
     setFirstName(data.firstName?.trim() || "");
   }
 
+  // -------------------------
+  // Load calendar entries
+  // -------------------------
   async function loadMonthData() {
-  const snap = await getDocs(
-    collection(db, "users", user.uid, "calendar")
-  );
-
-  const entries = {};
-
-  snap.forEach((docSnap) => {
-    const data = docSnap.data();
-
-    if (data.month === monthKey && data.date) {
-      // ✅ THIS is the key fix
-      entries[data.date] = data;
-    }
-  });
-
-  const monthlyStats = calculateCounters({
-    year,
-    month,
-    entries,
-    policy,
-    today: new Date(),
-  });
-
-  setStats(monthlyStats);
-
-  if (policy.scenarioType === "FIXED_WFO") {
-    const q = Math.ceil((month + 1) / 3);
-    setQuarterStats(
-      calculateQuarterStats(entries, policy, year, q)
+    const snap = await getDocs(
+      collection(db, "users", user.uid, "calendar")
     );
-  } else {
-    setQuarterStats(null);
-  }
-}
 
+    // ✅ IMPORTANT: date-keyed entries
+    const entries = {};
+
+    snap.forEach((docSnap) => {
+      const data = docSnap.data();
+      if (data.month === monthKey && data.date) {
+        entries[data.date] = data;
+      }
+    });
+
+    const monthlyStats = calculateCounters({
+      year,
+      month,
+      entries,
+      policy,
+    });
+
+    setStats(monthlyStats);
+
+    if (policy.scenarioType === "FIXED_WFO") {
+      const q = getQuarter(month);
+      setQuarterStats(
+        calculateQuarterStats(entries, policy, year, q)
+      );
+    } else {
+      setQuarterStats(null);
+    }
+  }
+
+  // -------------------------
+  // Greeting
+  // -------------------------
   const getGreeting = () => {
     if (!firstName) return "Hey";
     if (firstName === "Pallavi") return `Hey Sexy ${firstName}`;
@@ -80,28 +91,51 @@ export default function Dashboard({ user }) {
     return `Hey ${firstName}`;
   };
 
-  if (!policy || !stats) return null;
+  const prevMonth = () =>
+    setCurrentDate(new Date(year, month - 1, 1));
+  const nextMonth = () =>
+    setCurrentDate(new Date(year, month + 1, 1));
+
+  // -------------------------
+  // Loading guard
+  // -------------------------
+  if (!policy || !stats) {
+    return <div style={{ padding: 24 }}>Loading dashboard…</div>;
+  }
 
   return (
     <div className="dashboard">
+      {/* HEADER */}
       <header className="dash-header">
-        <div>
-          <h2>
+        <div className="header-left">
+          <h2 className="month-title">
             {currentDate.toLocaleString("default", { month: "long" })} {year}
           </h2>
-          <p>{getGreeting()}, manage your in-office and remote days.</p>
+          <p className="greeting-text">
+            {getGreeting()}, manage your in-office and remote days.
+          </p>
         </div>
 
         <div className="actions">
-          <button onClick={() => setCurrentDate(new Date(year, month - 1, 1))}>◀</button>
-          <button onClick={() => setCurrentDate(new Date(year, month + 1, 1))}>▶</button>
-          <button className="logout" onClick={() => signOut(auth)}>Logout</button>
+          <button onClick={prevMonth}>◀</button>
+          <button onClick={nextMonth}>▶</button>
+          <button className="logout" onClick={() => signOut(auth)}>
+            Logout
+          </button>
         </div>
       </header>
 
-      <Calendar currentDate={currentDate} onDataChange={loadMonthData} />
+      {/* CALENDAR */}
+      <Calendar
+        currentDate={currentDate}
+        onDataChange={loadMonthData}
+      />
 
-      <h3>Monthly Summary</h3>
+      {/* MONTHLY SUMMARY */}
+      <h3 style={{ marginBottom: 12, opacity: 0.9 }}>
+        Monthly Summary
+      </h3>
+
       <div className="stats">
         <div className="stat-card">Working Days: {stats.workingDays}</div>
         <div className="stat-card">WFO Done: {stats.wfo}</div>
@@ -109,23 +143,49 @@ export default function Dashboard({ user }) {
         <div className="stat-card">Leave: {stats.leave}</div>
         <div className="stat-card">Holiday: {stats.holiday}</div>
 
+        {/* Scenario 1 */}
+        {policy.scenarioType === "MONTHLY_WFH" && (
+          <div className="stat-card">
+            WFH Remaining: {stats.wfhRemaining}
+          </div>
+        )}
+
+        {/* Common */}
         <div className="stat-card highlight">
           Monthly WFO Remaining: {stats.monthlyWfoRemaining}
           {stats.compensationWfo > 0 && (
-            <span title={`+${stats.compensationWfo} due to holidays`} style={{ marginLeft: 8 }}>
+            <span
+              title={`+${stats.compensationWfo} due to holidays on WFO days`}
+              style={{
+                marginLeft: 8,
+                fontSize: 12,
+                opacity: 0.8,
+                cursor: "help",
+              }}
+            >
               (+{stats.compensationWfo})
             </span>
           )}
         </div>
       </div>
 
+      {/* QUARTERLY SUMMARY */}
       {policy.scenarioType === "FIXED_WFO" && quarterStats && (
         <>
-          <h3>Quarterly Summary</h3>
+          <h3 style={{ marginBottom: 12, opacity: 0.9 }}>
+            Quarterly Summary
+          </h3>
+
           <div className="stats">
-            <div className="stat-card">Quarterly Target: {policy.quarterlyTarget}</div>
-            <div className="stat-card">WFO Completed: {quarterStats.completed}</div>
-            <div className="stat-card">Leave Taken: {quarterStats.leave}</div>
+            <div className="stat-card">
+              Quarterly Target: {policy.quarterlyTarget}
+            </div>
+            <div className="stat-card">
+              WFO Completed: {quarterStats.completed}
+            </div>
+            <div className="stat-card">
+              Leave Taken: {quarterStats.leave}
+            </div>
             <div className="stat-card highlight">
               Quarterly WFO Remaining: {quarterStats.remaining}
             </div>

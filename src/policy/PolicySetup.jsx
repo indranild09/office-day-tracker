@@ -1,14 +1,26 @@
 import { useState } from "react";
+import { auth, db } from "../services/firebase";
 import { doc, setDoc } from "firebase/firestore";
-import { db } from "../services/firebase";
 
-const DAYS = ["MON", "TUE", "WED", "THU", "FRI"];
+const DAY_MAP = {
+  MON: "monday",
+  TUE: "tuesday",
+  WED: "wednesday",
+  THU: "thursday",
+  FRI: "friday",
+};
 
-export default function PolicySetup({ user, onDone }) {
-  const [type, setType] = useState("MONTHLY_WFH");
+export default function PolicySetup({ onDone }) {
+  const user = auth.currentUser;
+
+  const [scenarioType, setScenarioType] = useState("MONTHLY_WFH");
+
+  // Scenario 1
   const [wfhLimit, setWfhLimit] = useState("");
-  const [quarterlyTarget, setQuarterlyTarget] = useState("");
+
+  // Scenario 2
   const [fixedDays, setFixedDays] = useState([]);
+  const [quarterlyTarget, setQuarterlyTarget] = useState("");
 
   const toggleDay = (day) => {
     setFixedDays((prev) =>
@@ -19,81 +31,108 @@ export default function PolicySetup({ user, onDone }) {
   };
 
   const savePolicy = async () => {
-    if (type === "MONTHLY_WFH" && !wfhLimit) {
-      alert("Enter monthly WFH limit");
+    if (!user) return;
+
+    if (
+      scenarioType === "MONTHLY_WFH" &&
+      (!wfhLimit || Number(wfhLimit) < 0)
+    ) {
+      alert("Please enter valid WFH limit");
       return;
     }
 
-    if (type === "FIXED_WFO" && (!quarterlyTarget || fixedDays.length === 0)) {
-      alert("Select WFO days and quarterly target");
+    if (
+      scenarioType === "FIXED_WFO" &&
+      (fixedDays.length === 0 || !quarterlyTarget)
+    ) {
+      alert("Please select WFO days and quarterly target");
       return;
     }
 
-    await setDoc(doc(db, "users", user.uid), {
-      policy: {
-        scenarioType: type,
-        wfhLimit: Number(wfhLimit),
-        fixedWfoDays: fixedDays,
-        quarterlyTarget: Number(quarterlyTarget)
-      }
-    });
+    // ✅ CLEAN, SCENARIO-AWARE POLICY OBJECT
+    const policy =
+      scenarioType === "MONTHLY_WFH"
+        ? {
+            scenarioType: "MONTHLY_WFH",
+            wfhLimit: Number(wfhLimit),
+          }
+        : {
+            scenarioType: "FIXED_WFO",
+            fixedWfoDays: fixedDays.map((d) => DAY_MAP[d]),
+            quarterlyTarget: Number(quarterlyTarget),
+          };
 
-    onDone();
+    await setDoc(
+      doc(db, "users", user.uid),
+      { policy },
+      { merge: true }
+    );
+
+    onDone?.();
   };
 
   return (
-    <div className="app">
-      <div className="auth-card">
-        <h2 className="title">Set Your Office Policy</h2>
+    <div className="policy-card">
+      <h2>Set Your Office Policy</h2>
 
+      {/* Scenario Type */}
+      <div className="field">
+        <label>Policy Type</label>
         <select
-          value={type}
-          onChange={(e) => setType(e.target.value)}
-          className="select"
+          value={scenarioType}
+          onChange={(e) => setScenarioType(e.target.value)}
         >
-          <option value="MONTHLY_WFH">Monthly WFH</option>
-          <option value="FIXED_WFO">Fixed WFO + Quarterly</option>
+          <option value="MONTHLY_WFH">Monthly WFH Based</option>
+          <option value="FIXED_WFO">Fixed WFO Days</option>
         </select>
+      </div>
 
-        {type === "MONTHLY_WFH" && (
+      {/* Scenario 1 */}
+      {scenarioType === "MONTHLY_WFH" && (
+        <div className="field">
+          <label>WFH Allowed (per month)</label>
           <input
             type="number"
-            placeholder="Monthly WFH limit"
             value={wfhLimit}
             onChange={(e) => setWfhLimit(e.target.value)}
+            placeholder="e.g. 10"
           />
-        )}
+        </div>
+      )}
 
-        {type === "FIXED_WFO" && (
-          <>
-            <input
-              type="number"
-              placeholder="Quarterly WFO target"
-              value={quarterlyTarget}
-              onChange={(e) => setQuarterlyTarget(e.target.value)}
-            />
-
-            <div className="days-grid">
-              {DAYS.map((day) => (
+      {/* Scenario 2 */}
+      {scenarioType === "FIXED_WFO" && (
+        <>
+          <div className="field">
+            <label>Fixed WFO Days</label>
+            <div className="day-selector">
+              {Object.keys(DAY_MAP).map((day) => (
                 <button
                   key={day}
-                  type="button"
-                  className={`day-btn ${
-                    fixedDays.includes(day) ? "selected" : ""
-                  }`}
+                  className={fixedDays.includes(day) ? "active" : ""}
                   onClick={() => toggleDay(day)}
                 >
                   {day}
                 </button>
               ))}
             </div>
-          </>
-        )}
+          </div>
 
-        <button className="save-btn" onClick={savePolicy}>
-          Save Policy
-        </button>
-      </div>
+          <div className="field">
+            <label>Quarterly WFO Target</label>
+            <input
+              type="number"
+              value={quarterlyTarget}
+              onChange={(e) => setQuarterlyTarget(e.target.value)}
+              placeholder="e.g. 36"
+            />
+          </div>
+        </>
+      )}
+
+      <button className="save-btn" onClick={savePolicy}>
+        Save Policy
+      </button>
     </div>
   );
 }
